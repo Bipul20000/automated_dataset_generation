@@ -1,14 +1,19 @@
-"""Minimal FastAPI app exposing endpoints for running pipeline steps (stubs).
-"""
+# services/api/main.py
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
 from pathlib import Path
 import shutil
+from pipelines.run_pipeline import process_pdf
 
 app = FastAPI(title="Automated Dataset API")
 
-BASE = Path(__file__).resolve().parents[2]
+# Directories
+BASE = Path(__file__).resolve().parents[2]  # Project root
 UPLOAD_DIR = BASE / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+ANNOTATIONS_DIR = BASE / "data" / "annotations"
+ANNOTATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/health")
@@ -18,15 +23,22 @@ async def health():
 
 @app.post("/upload_pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith('.pdf'):
-        return {"error": "only pdf files supported in this stub"}
-    dest = UPLOAD_DIR / file.filename
-    with open(dest, 'wb') as f:
+    if file.content_type != "application/pdf":
+        return JSONResponse(status_code=400, content={"error": "File must be a PDF"})
+
+    pdf_path = UPLOAD_DIR / file.filename
+
+    # Save uploaded PDF
+    with open(pdf_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
-    return {"path": str(dest)}
+
+    # Process PDF with full pipeline
+    dataset = process_pdf(pdf_path)
+
+    return {"message": "PDF processed successfully", "dataset": dataset, "path": str(pdf_path)}
 
 
 @app.get("/list_uploads")
 async def list_uploads():
-    files = [str(p) for p in UPLOAD_DIR.iterdir() if p.is_file()]
-    return {"uploads": files}
+    pdf_files = sorted([f.name for f in UPLOAD_DIR.glob("*.pdf")])
+    return {"uploads": pdf_files}

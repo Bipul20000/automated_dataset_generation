@@ -1,30 +1,36 @@
-"""Export dataset to JSON/CSV
-"""
+# pipelines/export.py
 from pathlib import Path
-from typing import List, Dict
 import json
-import csv
+import shutil
 
+EXPORT_BASE = Path("data/exports")
+EXPORT_BASE.mkdir(parents=True, exist_ok=True)
 
-def export_json(items: List[Dict], out_path: str):
-    p = Path(out_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, 'w', encoding='utf-8') as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-
-
-def export_csv(items: List[Dict], out_path: str):
-    if not items:
+def export_dataset(dataset: list, pdf_name: str):
+    """
+    Exports processed dataset:
+    - JSON file with all page info
+    - Optional: copy images to structured folder
+    """
+    if not dataset:
+        print(f"No data to export for {pdf_name}")
         return
-    p = Path(out_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    keys = sorted({k for it in items for k in it.keys()})
-    with open(p, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=keys)
-        writer.writeheader()
-        for it in items:
-            writer.writerow({k: it.get(k, '') for k in keys})
 
+    # Create folder for this PDF
+    pdf_export_dir = EXPORT_BASE / pdf_name
+    pdf_export_dir.mkdir(exist_ok=True)
 
-if __name__ == "__main__":
-    print("export module - export_json / export_csv")
+    # Copy images to export folder and update paths in dataset
+    for page in dataset:
+        img_path = Path(page["image"])
+        if img_path.exists():
+            dest_img = pdf_export_dir / img_path.name
+            shutil.copy(img_path, dest_img)
+            page["image"] = str(dest_img)  # update path in dataset
+
+    # Save JSON
+    output_file = pdf_export_dir / f"{pdf_name}_dataset.json"
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(dataset, f, ensure_ascii=False, indent=2)
+
+    print(f"Dataset exported for {pdf_name} → {output_file}")
